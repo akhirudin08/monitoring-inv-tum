@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Monitoring Invoice TUM</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+
+  <style>
+    :root {
+      --sidebar-width: 280px;
+      --primary-color: #3498db;
+      --success-color: #2ecc71;
+      --warning-color: #f39c12;
+      --danger-color: #e74c3c;
+      --light-grey: #f0f2f5;
+      --medium-grey: #ecf0f1;
+      --dark-grey: #7f8c8d;
+      --text-color: #34495e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--light-grey);
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      color: var(--text-color);
+    }
+    .sidebar {
+      width: var(--sidebar-width);
+      background: #2c3e50;
+      color: white;
+      padding: 20px;
+      height: 100%;
+      overflow-y: auto;
+      flex-shrink: 0;
+      transition: margin-left 0.3s ease;
+    }
+    .main {
+      flex-grow: 1;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      transition: margin-left 0.3s ease;
+      overflow-y: auto; /* FIX: Mengizinkan scroll vertikal jika konten panjang */
+    }
+    body.sidebar-hidden .sidebar {
+      margin-left: calc(-1 * var(--sidebar-width));
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .hamburger-btn {
+      font-size: 24px; background: transparent; border: none;
+      color: var(--text-color); cursor: pointer; margin-right: 15px;
+    }
+    .header h2 { margin: 0; flex-grow: 1; }
+    .btn { background: var(--primary-color); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    .btn:hover { background: #2980b9; }
+    .btn-secondary { background-color: var(--dark-grey); }
+    .btn-secondary:hover { background-color: #95a5a6; }
+
+    /* === STAT CARDS (Ukuran Dikecilkan) === */
+    .stat-cards-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+        flex-shrink: 0;
+    }
+    .stat-card {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    .stat-card .icon {
+        font-size: 20px;
+        padding: 12px;
+        border-radius: 50%;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 48px;
+        height: 48px;
+    }
+    .stat-card .icon.total { background-color: var(--primary-color); }
+    .stat-card .icon.on-proses { background-color: var(--warning-color); }
+    .stat-card .icon.selesai { background-color: var(--success-color); }
+    .stat-card .icon.peringatan { background-color: var(--danger-color); }
+    .stat-card h3 { margin: 0; font-size: 24px; }
+    .stat-card p { margin: 0; color: #888; font-size: 14px; }
+    
+    /* === CONTROLS PANEL === */
+    .controls-panel {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 20px;
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        margin-top: 20px;
+        flex-wrap: wrap;
+        flex-shrink: 0;
+    }
+    .filter-group, .action-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    #searchInput, #statusFilter, .date-filter-input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+    .date-filter-group { display: flex; align-items: center; gap: 5px; }
+    .date-filter-group label { font-size: 14px; }
+
+    /* === SIDEBAR === */
+    .sidebar h3 { margin-top: 0; font-size: 18px; border-bottom: 1px solid #4a627a; padding-bottom: 10px; margin-bottom: 10px; }
+    .sidebar label.section-toggle { display: block; margin-top: 20px; font-size: 16px; cursor: pointer; font-weight: 600; padding: 10px; border-radius: 5px; transition: background-color 0.2s; }
+    .sidebar label.section-toggle:hover, .sidebar label.section-toggle.active { background-color: #34495e; }
+    .sidebar input[type="text"], .sidebar input[type="number"] { width: 100%; padding: 6px; margin-top: 5px; border-radius: 4px; border: none; color: #333;}
+    .sidebar .settings-section { display: none; margin-top: 10px; background-color: #34495e; padding: 15px; border-radius: 5px; }
+    #reportSummary { background: #34495e; border-radius: 6px; padding: 10px 15px; margin-top: 15px; }
+    #reportSummary p { margin: 10px 0; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+    #reportSummary b { font-size: 16px; background-color: #ecf0f1; color: #2c3e50; padding: 2px 8px; border-radius: 4px; }
+    ul#statusList { list-style: none; padding-left: 0; margin-top: 10px; }
+    ul#statusList li { margin-bottom: 8px; display: flex; align-items: center; gap: 5px;}
+    ul#statusList input { flex-grow: 1; }
+    .leadtime-setting { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;}
+    .leadtime-setting label { margin: 0; cursor: default; font-size: 14px; font-weight: normal; }
+    .leadtime-setting input { width: 60px; text-align: right; }
+    .form-container { margin-top: 20px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: none; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+    .form-container input, .form-container select { margin-bottom: 10px; padding: 8px; width: 100%; border: 1px solid #ccc; border-radius: 4px; transition: border-color 0.3s; }
+    .form-container input:focus, .form-container select:focus { border-width: 2px; outline: none; }
+    .form-container label { display: block; font-size: 14px; font-weight: 600; color: #333; margin-bottom: 5px; }
+    .form-field { display: flex; flex-direction: column; }
+    .form-field .label-tum { color: var(--primary-color); }
+    .form-field .label-tum + input { border-color: var(--primary-color); }
+    .form-field .label-sparepart { color: var(--warning-color); }
+    .form-field .label-sparepart + input { border-color: var(--warning-color); }
+    .form-field .label-logistic { color: var(--success-color); }
+    .form-field .label-logistic + input { border-color: var(--success-color); }
+    #chartContainer {
+      background: white; padding: 20px; border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: none; margin-top: 20px; flex-shrink: 0;
+    }
+    #tableView { display: flex; flex-direction: column; flex-grow: 1; min-height: 0; margin-top: 0; }
+    .table-container { flex-grow: 1; overflow: auto; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 15px; border-bottom: 1px solid var(--medium-grey); text-align: left; white-space: nowrap; }
+    th { background-color: #f9fafb; position: sticky; top: 0; z-index: 2; text-align: center; font-size: 12px; color: #555; }
+    .status-Selesai { background-color: #d4edda; }
+    .peringatan { font-weight: bold; color: var(--danger-color); background-color: #fadbd8; }
+    .table-footer { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: white; border-top: 1px solid var(--medium-grey); flex-shrink: 0; border-radius: 0 0 8px 8px;}
+    .pagination-controls button { margin: 0 2px; padding: 5px 10px; border: 1px solid #ddd; background: #fff; cursor: pointer; border-radius: 4px; }
+    .pagination-controls button:hover { background: #f0f0f0; }
+    .pagination-controls button.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+    .pagination-controls button:disabled { cursor: not-allowed; opacity: 0.5; }
+    .rows-per-page select { padding: 5px; border-radius: 4px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+
+  <div class="sidebar">
+    <h3>⚙️ Sidebar Pengaturan</h3>
+    
+    <label class="section-toggle active" id="navTable" onclick="showView('table')">📊 Ringkasan Laporan</label>
+    <div id="reportSummary">
+      <p>Total Invoice: <b id="totalCount">0</b></p>
+      <p>On Proses: <b id="onProsesCount">0</b></p>
+      <p>Selesai: <b id="selesaiCount">0</b></p>
+      <p>Reject: <b id="rejectCount">0</b></p>
+    </div>
+    <label class="section-toggle" id="navChart" onclick="showView('chart')">📈 Report Grafik</label>
+
+    <label class="section-toggle" onclick="toggleSection('leadtimeSection')">⚙️ Pengaturan Leadtime</label>
+    <div class="settings-section" id="leadtimeSection">
+      <div class="leadtime-setting">
+          <label for="lt_tum_sparepart1">TUM → Sparepart</label>
+          <input type="number" id="lt_tum_sparepart1" min="1" />
+      </div>
+      <div class="leadtime-setting">
+          <label for="lt_sparepart1_routing">Sparepart → Routing</label>
+          <input type="number" id="lt_sparepart1_routing" min="1" />
+      </div>
+      <div class="leadtime-setting">
+          <label for="lt_routing_logistic1">Routing → Logistic</label>
+          <input type="number" id="lt_routing_logistic1" min="1" />
+      </div>
+      <div class="leadtime-setting">
+          <label for="lt_tum2_logistic2">TUM → Logistic</label>
+          <input type="number" id="lt_tum2_logistic2" min="1" />
+      </div>
+      <div class="leadtime-setting">
+          <label for="lt_logistic2_pa">Logistic → Create PA</label>
+          <input type="number" id="lt_logistic2_pa" min="1" />
+      </div>
+      <button class="btn" onclick="saveLeadtimeSettings()" style="width:100%; margin-top:10px;">Simpan Leadtime</button>
+    </div>
+
+    <label class="section-toggle" onclick="toggleSection('statusSection')">📋 Kelola Status</label>
+    <div class="settings-section" id="statusSection">
+      <input type="text" id="newStatus" placeholder="Status Baru"/>
+      <button class="btn" onclick="addStatus()" style="width:100%; margin-top:5px;">Tambah Status</button>
+      <ul id="statusList"></ul>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="header">
+        <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
+        <h2>Dashboard Monitoring Invoice</h2>
+    </div>
+
+    <div class="stat-cards-container">
+        <div class="stat-card">
+            <span class="icon total">📊</span>
+            <div>
+                <h3 id="totalCountCard">0</h3>
+                <p>Total Invoice</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <span class="icon on-proses">📝</span>
+            <div>
+                <h3 id="onProsesCountCard">0</h3>
+                <p>On Proses</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <span class="icon selesai">✔️</span>
+            <div>
+                <h3 id="selesaiCountCard">0</h3>
+                <p>Selesai</p>
+            </div>
+        </div>
+        <div class="stat-card">
+            <span class="icon peringatan">⚠️</span>
+            <div>
+                <h3 id="peringatanCountCard">0</h3>
+                <p>Peringatan</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls-panel">
+        <div class="filter-group">
+            <div class="date-filter-group">
+                <label for="startDateFilter">Dari:</label>
+                <input type="date" id="startDateFilter" class="date-filter-input">
+                <label for="endDateFilter">Sampai:</label>
+                <input type="date" id="endDateFilter" class="date-filter-input">
+            </div>
+             <select id="statusFilter"></select>
+             <input type="search" id="searchInput" placeholder="Cari di semua kolom...">
+             <button class="btn" onclick="applyFilters()">Terapkan Filter</button>
+        </div>
+        <div class="action-group">
+            <button class="btn btn-secondary" onclick="resetFilters()">Reset Semua</button>
+            <button class="btn btn-secondary" id="exportBtn">Ekspor ke Excel</button>
+            <button class="btn" onclick="toggleForm()">+ Tambah Data</button>
+        </div>
+    </div>
+    
+    <div class="form-container" id="formContainer">
+        <div class="form-grid">
+            <div class="form-field"><label for="noInvoice">No Invoice</label><input type="text" id="noInvoice" /></div>
+            <div class="form-field"><label for="tglKirimTimesheet" class="label-tum">Tgl Kirim Timesheet (TUM)</label><input type="date" id="tglKirimTimesheet" /></div>
+            <div class="form-field"><label for="tglTerimaTimesheetTDM1" class="label-sparepart">Tgl terima timesheet dari TUM (Sparepart)</label><input type="date" id="tglTerimaTimesheetTDM1" /></div>
+            <div class="form-field"><label for="tglRoutingApproval" class="label-sparepart">Tgl Routing Approval (Sparepart)</label><input type="date" id="tglRoutingApproval" /></div>
+            <div class="form-field"><label for="tglTerimaTimesheetSparepart" class="label-logistic">Tgl Terima Timesheet dari Sparepart (Logistic)</label><input type="date" id="tglTerimaTimesheetSparepart" /></div>
+            <div class="form-field"><label for="tglKirimInvoice" class="label-tum">Tgl Kirim Invoice (TUM)</label><input type="date" id="tglKirimInvoice" /></div>
+            <div class="form-field"><label for="tglTerimaInvoice" class="label-logistic">Tgl Terima Invoice (Logistic)</label><input type="date" id="tglTerimaInvoice" /></div>
+            <div class="form-field"><label for="tglCreatePA" class="label-logistic">Tgl Create PA (Logistic)</label><input type="date" id="tglCreatePA" /></div>
+            <div class="form-field"><label for="status">Status</label><select id="status"></select></div>
+            <div class="form-field"><label for="remark">Remark</label><input type="text" id="remark" /></div>
+        </div>
+        <button class="btn" id="submitBtn" onclick="saveInvoice()" style="margin-top:20px;">Simpan</button>
+        <button class="btn" onclick="toggleForm(false)" style="margin-top:20px; background-color: #e74c3c;">Batal</button>
+    </div>
+
+    <div class="chart-container" id="chartContainer">
+        <canvas id="leadtimeChart"></canvas>
+    </div>
+
+    <div id="tableView">
+        <div class="table-container">
+            <table id="invoiceTable">
+                <thead>
+                    <tr>
+                        <th rowspan="2">No Invoice</th>
+                        <th colspan="2">TUM</th>
+                        <th colspan="4">Sparepart</th>
+                        <th>Logistic</th>
+                        <th colspan="2">TUM</th>
+                        <th colspan="2">Logistic</th>
+                        <th>Logistic</th>
+                        <th rowspan="2">Status</th>
+                        <th rowspan="2">Remark</th>
+                        <th rowspan="2">Aksi</th>
+                    </tr>
+                    <tr>
+                        <th>Tgl kirim timesheet</th>
+                        <th>Leadtime</th>
+                        <th>Tgl terima timesheet dari TUM</th>
+                        <th>Leadtime</th>
+                        <th>Routing Approval</th>
+                        <th>Leadtime</th>
+                        <th>Tgl Terima Timesheet dari Sparepart</th>
+                        <th>Tgl kirim invoice</th>
+                        <th>Leadtime</th>
+                        <th>Tgl terima invoice</th>
+                        <th>Leadtime</th>
+                        <th>Tgl Create PA</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="table-footer">
+            <div class="pagination-controls" id="paginationControls"></div>
+            <div class="rows-per-page">
+                <label for="rowsPerPage">Baris per halaman: </label>
+                <select id="rowsPerPage"><option value="20">20</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option></select>
+            </div>
+        </div>
+    </div>
+  </div>
+
+<script>
+// === INISIALISASI FIREBASE & CHART.JS PLUGIN ===
+const firebaseConfig = {
+  apiKey: "AIzaSyD6rNo9A6YgxOjqFoDG2rwTPIVBxefqp3g",
+  authDomain: "monitoring-inv-tum.firebaseapp.com",
+  databaseURL: "https://monitoring-inv-tum-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "monitoring-inv-tum",
+  storageBucket: "monitoring-inv-tum.appspot.com",
+  messagingSenderId: "174647636112",
+  appId: "1:174647636112:web:74c36134b19033a4322815",
+  measurementId: "G-EW4CZK7ZZB"
+};
+const app = firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+Chart.register(ChartDataLabels);
+
+// === PUSAT DATA DAN PENGATURAN ===
+let allInvoices = []; 
+let statusOptions = ["On Proses", "Reject", "Selesai"];
+let leadtimeSettings = {
+    lt_tum_sparepart1: 7,
+    lt_sparepart1_routing: 7,
+    lt_routing_logistic1: 7,
+    lt_tum2_logistic2: 7,
+    lt_logistic2_pa: 7,
+};
+let editingId = null; 
+let currentPage = 1;
+let rowsPerPage = 20;
+let leadtimeChartInstance; 
+
+// === FUNGSI UTAMA & RENDER ===
+function render(dataToRender) { 
+  const data = dataToRender || allInvoices;
+  renderTable(data); 
+  updateReport(); 
+  renderLeadtimeChart(data);
+}
+
+function showView(viewName) {
+    const chartView = document.getElementById('chartContainer');
+    const tableView = document.getElementById('tableView');
+    const navChart = document.getElementById('navChart');
+    const navTable = document.getElementById('navTable');
+
+    if (viewName === 'chart') {
+        chartView.style.display = 'block';
+        tableView.style.display = 'none';
+        navChart.classList.add('active');
+        navTable.classList.remove('active');
+    } else { 
+        chartView.style.display = 'none';
+        tableView.style.display = 'flex';
+        navTable.classList.add('active');
+        navChart.classList.remove('active');
+    }
+}
+
+function applyFilters() {
+    currentPage = 1; 
+    let filteredData = [...allInvoices];
+
+    const statusFilter = document.getElementById("statusFilter").value;
+    const searchTerm = document.getElementById("searchInput").value.toLowerCase();
+    const startDate = document.getElementById("startDateFilter").value;
+    const endDate = document.getElementById("endDateFilter").value;
+
+    if (startDate && endDate) {
+        filteredData = filteredData.filter(invoice => {
+            const invoiceDate = invoice.tglTerimaInvoice;
+            return invoiceDate && invoiceDate >= startDate && invoiceDate <= endDate;
+        });
+    }
+    if (statusFilter !== "semua") {
+        filteredData = filteredData.filter(invoice => invoice.status === statusFilter);
+    }
+    if (searchTerm) {
+        filteredData = filteredData.filter(invoice => 
+            Object.values(invoice).some(val => String(val).toLowerCase().includes(searchTerm))
+        );
+    }
+    render(filteredData);
+}
+
+function resetFilters() {
+    document.getElementById("statusFilter").value = "semua";
+    document.getElementById("searchInput").value = "";
+    document.getElementById("startDateFilter").value = "";
+    document.getElementById("endDateFilter").value = "";
+    currentPage = 1;
+    render(allInvoices);
+}
+
+function renderTable(data) {
+    const tbody = document.querySelector("#invoiceTable tbody");
+    tbody.innerHTML = "";
+    
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    const paginatedInvoices = data.slice(startIndex, startIndex + rowsPerPage);
+
+    paginatedInvoices.forEach(invoice => {
+        const row = document.createElement("tr");
+        row.dataset.id = invoice.id;
+        row.className = invoice.status ? `status-${invoice.status.replace(/\s+/g, '')}` : '';
+        const getLeadtimeCell = (startDate, endDate, thresholdKey) => {
+            if (!startDate || !endDate) return '<td></td>';
+            const diffDays = Math.round((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24));
+            const isOverdue = diffDays > leadtimeSettings[thresholdKey];
+            return `<td class="${isOverdue ? 'peringatan' : ''}">${diffDays} hari</td>`;
+        };
+        row.innerHTML = `
+            <td>${invoice.noInvoice || ""}</td>
+            <td>${invoice.tglKirimTimesheet || ""}</td>
+            ${getLeadtimeCell(invoice.tglKirimTimesheet, invoice.tglTerimaTimesheetTDM1, 'lt_tum_sparepart1')}
+            <td>${invoice.tglTerimaTimesheetTDM1 || ""}</td>
+            ${getLeadtimeCell(invoice.tglTerimaTimesheetTDM1, invoice.tglRoutingApproval, 'lt_sparepart1_routing')}
+            <td>${invoice.tglRoutingApproval || ""}</td>
+            ${getLeadtimeCell(invoice.tglRoutingApproval, invoice.tglTerimaTimesheetSparepart, 'lt_routing_logistic1')}
+            <td>${invoice.tglTerimaTimesheetSparepart || ""}</td>
+            <td>${invoice.tglKirimInvoice || ""}</td>
+            ${getLeadtimeCell(invoice.tglKirimInvoice, invoice.tglTerimaInvoice, 'lt_tum2_logistic2')}
+            <td>${invoice.tglTerimaInvoice || ""}</td>
+            ${getLeadtimeCell(invoice.tglTerimaInvoice, invoice.tglCreatePA, 'lt_logistic2_pa')}
+            <td>${invoice.tglCreatePA || ""}</td>
+            <td><select onchange="updateInvoiceStatus('${invoice.id}', this.value)">${statusOptions.map(opt => `<option value="${opt}" ${opt === invoice.status ? "selected" : ""}>${opt}</option>`).join("")}</select></td>
+            <td>${invoice.remark || ""}</td>
+            <td><button onclick="editInvoice('${invoice.id}')">✏️</button><button onclick="deleteInvoice('${invoice.id}')">🗑️</button></td>
+        `;
+        tbody.appendChild(row);
+    });
+    renderPaginationControls(data.length);
+}
+
+function renderLeadtimeChart(data) {
+    const ctx = document.getElementById('leadtimeChart').getContext('2d');
+    const stages = [
+        { label: 'TUM → Sparepart', start: 'tglKirimTimesheet', end: 'tglTerimaTimesheetTDM1', settingKey: 'lt_tum_sparepart1' },
+        { label: 'Sparepart → Routing', start: 'tglTerimaTimesheetTDM1', end: 'tglRoutingApproval', settingKey: 'lt_sparepart1_routing' },
+        { label: 'Routing → Logistic', start: 'tglRoutingApproval', end: 'tglTerimaTimesheetSparepart', settingKey: 'lt_routing_logistic1' },
+        { label: 'TUM → Logistic (Inv)', start: 'tglKirimInvoice', end: 'tglTerimaInvoice', settingKey: 'lt_tum2_logistic2' },
+        { label: 'Logistic → PA', start: 'tglTerimaInvoice', end: 'tglCreatePA', settingKey: 'lt_logistic2_pa' }
+    ];
+    const averageLeadtimes = stages.map(stage => {
+        let totalDays = 0;
+        let count = 0;
+        data.forEach(inv => {
+            if (inv[stage.start] && inv[stage.end]) {
+                const diff = new Date(inv[stage.end]) - new Date(inv[stage.start]);
+                totalDays += diff / (1000 * 60 * 60 * 24);
+                count++;
+            }
+        });
+        return count > 0 ? parseFloat((totalDays / count).toFixed(2)) : 0;
+    });
+    const targetLeadtimes = stages.map(stage => leadtimeSettings[stage.settingKey] || 0);
+    if (leadtimeChartInstance) {
+        leadtimeChartInstance.destroy();
+    }
+    leadtimeChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: stages.map(s => s.label),
+            datasets: [
+                { label: 'Rata-rata Aktual (Hari)', data: averageLeadtimes, backgroundColor: 'rgba(54, 162, 235, 0.6)', borderColor: 'rgba(54, 162, 235, 1)', borderWidth: 1 },
+                { label: 'Target (Hari)', data: targetLeadtimes, backgroundColor: 'rgba(255, 99, 132, 0.6)', borderColor: 'rgba(255, 99, 132, 1)', borderWidth: 1 }
+            ]
+        },
+        options: {
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'Jumlah Hari' } } },
+            plugins: {
+                title: { display: true, text: 'Perbandingan Lead Time: Aktual vs. Target', font: { size: 16 } },
+                datalabels: { anchor: 'end', align: 'top', formatter: (value) => value > 0 ? value : '', color: '#444', font: { weight: 'bold' } }
+            }
+        }
+    });
+}
+
+function saveInvoice() {
+    const invoiceData = {
+        noInvoice: document.getElementById("noInvoice").value,
+        tglKirimTimesheet: document.getElementById("tglKirimTimesheet").value,
+        tglTerimaTimesheetTDM1: document.getElementById("tglTerimaTimesheetTDM1").value,
+        tglRoutingApproval: document.getElementById("tglRoutingApproval").value,
+        tglTerimaTimesheetSparepart: document.getElementById("tglTerimaTimesheetSparepart").value,
+        tglKirimInvoice: document.getElementById("tglKirimInvoice").value,
+        tglTerimaInvoice: document.getElementById("tglTerimaInvoice").value,
+        tglCreatePA: document.getElementById("tglCreatePA").value,
+        status: document.getElementById("status").value,
+        remark: document.getElementById("remark").value,
+    };
+    if (!invoiceData.noInvoice) { return alert("No Invoice wajib diisi!"); }
+    if (editingId) {
+        database.ref('invoices/' + editingId).update(invoiceData);
+        editingId = null;
+    } else {
+        database.ref('invoices').push(invoiceData);
+    }
+    toggleForm(false);
+}
+
+function editInvoice(id) {
+    const invoice = allInvoices.find(inv => inv.id === id);
+    if (!invoice) return;
+    editingId = id;
+    document.getElementById("noInvoice").value = invoice.noInvoice || "";
+    document.getElementById("tglKirimTimesheet").value = invoice.tglKirimTimesheet || "";
+    document.getElementById("tglTerimaTimesheetTDM1").value = invoice.tglTerimaTimesheetTDM1 || "";
+    document.getElementById("tglRoutingApproval").value = invoice.tglRoutingApproval || "";
+    document.getElementById("tglTerimaTimesheetSparepart").value = invoice.tglTerimaTimesheetSparepart || "";
+    document.getElementById("tglKirimInvoice").value = invoice.tglKirimInvoice || "";
+    document.getElementById("tglTerimaInvoice").value = invoice.tglTerimaInvoice || "";
+    document.getElementById("tglCreatePA").value = invoice.tglCreatePA || "";
+    document.getElementById("status").value = invoice.status || "";
+    document.getElementById("remark").value = invoice.remark || "";
+    document.getElementById("submitBtn").textContent = "✅ Simpan Perubahan";
+    toggleForm(true);
+}
+
+function deleteInvoice(id) {
+    if (confirm("Apakah Anda yakin ingin menghapus data ini? Data akan hilang permanen.")) {
+        database.ref('invoices/' + id).remove();
+    }
+}
+
+function updateInvoiceStatus(id, newStatus) {
+    database.ref('invoices/' + id).update({ status: newStatus });
+}
+
+function toggleSection(sectionId) {
+    const section = document.getElementById(sectionId);
+    section.style.display = section.style.display === "none" || section.style.display === '' ? "block" : "none";
+}
+
+function renderStatusList() {
+    const list = document.getElementById("statusList");
+    if(!list) return;
+    list.innerHTML = "";
+    statusOptions.forEach((status, index) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<input type="text" value="${status}" onchange="editStatus(${index}, this.value)" /><button onclick="deleteStatus(${index})">🗑️</button>`;
+        list.appendChild(li);
+    });
+    updateStatusDropdown();
+    database.ref('config/statusOptions').set(statusOptions);
+}
+function addStatus() {
+    const newStatus = document.getElementById("newStatus").value.trim();
+    if (newStatus && !statusOptions.includes(newStatus)) {
+        statusOptions.push(newStatus);
+        document.getElementById("newStatus").value = "";
+        renderStatusList();
+    } else {
+        alert("Status tidak boleh kosong atau sudah ada.");
+    }
+}
+function editStatus(index, newValue) {
+    if (newValue.trim()) { statusOptions[index] = newValue.trim(); renderStatusList(); }
+}
+function deleteStatus(index) {
+    if (statusOptions.length > 1) {
+        statusOptions.splice(index, 1);
+        renderStatusList();
+    } else {
+        alert("Harus ada minimal satu status.");
+    }
+}
+function updateStatusDropdown() {
+    const statusSelect = document.getElementById("status");
+    if(statusSelect) {
+        statusSelect.innerHTML = statusOptions.map(opt => `<option value="${opt}">${opt}</option>`).join("");
+    }
+}
+
+function populateStatusFilter() {
+    const statusFilter = document.getElementById('statusFilter');
+    statusFilter.innerHTML = `<option value="semua">Semua Status</option>`;
+    statusOptions.forEach(opt => {
+        statusFilter.innerHTML += `<option value="${opt}">${opt}</option>`;
+    });
+}
+
+function renderLeadtimeSettings() {
+    for (const key in leadtimeSettings) {
+        const element = document.getElementById(key);
+        if (element) { element.value = leadtimeSettings[key]; }
+    }
+}
+function saveLeadtimeSettings() {
+    for (const key in leadtimeSettings) {
+        const element = document.getElementById(key);
+        if (element) { leadtimeSettings[key] = parseInt(element.value) || 1; }
+    }
+    database.ref('config/leadtimeSettings').set(leadtimeSettings);
+    alert('Pengaturan leadtime berhasil disimpan.');
+    render();
+}
+
+function toggleSidebar() {
+    document.body.classList.toggle('sidebar-hidden');
+    localStorage.setItem('sidebarState', document.body.classList.contains('sidebar-hidden') ? 'hidden' : 'visible');
+}
+function toggleForm(forceShow = null) {
+    const form = document.getElementById("formContainer");
+    const isVisible = form.style.display === "block";
+    if (forceShow === true || !isVisible) {
+        form.style.display = "block";
+        if (!editingId) {
+            form.querySelector('.form-grid').querySelectorAll('input, select').forEach(el => el.value = '');
+             document.getElementById("submitBtn").textContent = "Simpan";
+        }
+    } else {
+        form.style.display = "none";
+        editingId = null;
+    }
+}
+function updateReport() {
+    let onProses = allInvoices.filter(inv => inv.status === "On Proses").length;
+    let selesai = allInvoices.filter(inv => inv.status === "Selesai").length;
+    let reject = allInvoices.filter(inv => inv.status === "Reject").length;
+    let peringatan = 0;
+    const stages = [
+        { key: 'lt_tum_sparepart1', start: 'tglKirimTimesheet', end: 'tglTerimaTimesheetTDM1' }, { key: 'lt_sparepart1_routing', start: 'tglTerimaTimesheetTDM1', end: 'tglRoutingApproval' },
+        { key: 'lt_routing_logistic1', start: 'tglRoutingApproval', end: 'tglTerimaTimesheetSparepart' }, { key: 'lt_tum2_logistic2', start: 'tglKirimInvoice', end: 'tglTerimaInvoice' },
+        { key: 'lt_logistic2_pa', start: 'tglTerimaInvoice', end: 'tglCreatePA' }
+    ];
+    allInvoices.forEach(inv => {
+        if (inv.status !== 'Selesai') {
+            for (const stage of stages) {
+                if (inv[stage.start] && inv[stage.end]) {
+                    const diffDays = Math.round((new Date(inv[stage.end]) - new Date(inv[stage.start])) / (1000 * 60 * 60 * 24));
+                    if (diffDays > leadtimeSettings[stage.key]) {
+                        peringatan++;
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    document.getElementById("totalCount").textContent = allInvoices.length;
+    document.getElementById("onProsesCount").textContent = onProses;
+    document.getElementById("selesaiCount").textContent = selesai;
+    document.getElementById("rejectCount").textContent = reject;
+    document.getElementById("totalCountCard").textContent = allInvoices.length;
+    document.getElementById("onProsesCountCard").textContent = onProses;
+    document.getElementById("selesaiCountCard").textContent = selesai;
+    document.getElementById("peringatanCountCard").textContent = peringatan;
+}
+function renderPaginationControls(totalItems) {
+    const paginationControls = document.getElementById("paginationControls");
+    paginationControls.innerHTML = "";
+    const totalPages = Math.ceil(totalItems / rowsPerPage);
+    if (totalPages <= 1) return;
+    const createButton = (text, page, disabled = false) => {
+        const button = document.createElement("button");
+        button.innerHTML = text;
+        button.disabled = disabled;
+        button.onclick = () => { currentPage = page; applyFilters(); };
+        if (currentPage === page) button.classList.add('active');
+        return button;
+    };
+    paginationControls.appendChild(createButton('«', currentPage - 1, currentPage === 1));
+    for (let i = 1; i <= totalPages; i++) {
+        paginationControls.appendChild(createButton(i, i));
+    }
+    paginationControls.appendChild(createButton('»', currentPage + 1, currentPage === totalPages));
+}
+function exportToExcel() {
+    const dataToExport = allInvoices.map(inv => ({
+        'No Invoice': inv.noInvoice,
+        'Tgl kirim timesheet': inv.tglKirimTimesheet,
+        'Tgl terima timesheet dari TUM': inv.tglTerimaTimesheetTDM1,
+        'Routing Approval': inv.tglRoutingApproval,
+        'Tgl Terima Timesheet dari Sparepart': inv.tglTerimaTimesheetSparepart,
+        'Tgl kirim invoice': inv.tglKirimInvoice,
+        'Tgl terima invoice': inv.tglTerimaInvoice,
+        'Tgl Create PA': inv.tglCreatePA,
+        'Status': inv.status,
+        'Remark': inv.remark,
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Invoices");
+    XLSX.writeFile(workbook, "Laporan_Invoice_TUM.xlsx");
+}
+
+window.addEventListener("load", () => {
+    document.getElementById("searchInput").value = "";
+    if (localStorage.getItem('sidebarState') === 'hidden') {
+        document.body.classList.add('sidebar-hidden');
+    }
+    database.ref('config').once('value', (snapshot) => {
+        if (snapshot.exists()) {
+            const config = snapshot.val();
+            if (config.statusOptions) statusOptions = config.statusOptions;
+            if (config.leadtimeSettings) leadtimeSettings = config.leadtimeSettings;
+        }
+        renderStatusList();
+        renderLeadtimeSettings();
+        populateStatusFilter();
+    });
+    database.ref('invoices').on('value', (snapshot) => {
+        const data = snapshot.val();
+        allInvoices = data ? Object.keys(data).map(key => ({ id: key, ...data[key] })) : [];
+        applyFilters();
+    });
+    document.getElementById("rowsPerPage").value = rowsPerPage;
+    showView('table');
+});
+
+document.getElementById("searchInput").addEventListener("input", applyFilters);
+document.getElementById("statusFilter").addEventListener("change", applyFilters);
+document.getElementById("exportBtn").addEventListener("click", exportToExcel);
+
+</script>
+</body>
+</html>
