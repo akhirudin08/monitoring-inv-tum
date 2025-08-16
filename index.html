@@ -42,6 +42,10 @@
       overflow-y: auto;
       flex-shrink: 0;
       transition: margin-left 0.3s ease;
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 1000;
     }
     .main {
       flex-grow: 1;
@@ -50,10 +54,14 @@
       flex-direction: column;
       height: 100%;
       transition: margin-left 0.3s ease;
-      overflow-y: auto; /* FIX: Mengizinkan scroll vertikal jika konten panjang */
+      overflow-y: auto;
+      margin-left: var(--sidebar-width);
     }
     body.sidebar-hidden .sidebar {
       margin-left: calc(-1 * var(--sidebar-width));
+    }
+    body.sidebar-hidden .main {
+        margin-left: 0;
     }
     .header {
       display: flex;
@@ -64,13 +72,13 @@
       font-size: 24px; background: transparent; border: none;
       color: var(--text-color); cursor: pointer; margin-right: 15px;
     }
-    .header h2 { margin: 0; flex-grow: 1; }
+    .header h2 { margin: 0; flex-grow: 1; font-size: 22px; }
     .btn { background: var(--primary-color); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; gap: 8px; font-size: 14px; }
     .btn:hover { background: #2980b9; }
     .btn-secondary { background-color: var(--dark-grey); }
     .btn-secondary:hover { background-color: #95a5a6; }
 
-    /* === STAT CARDS (Ukuran Dikecilkan) === */
+    /* STAT CARDS */
     .stat-cards-container {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -88,15 +96,9 @@
         gap: 15px;
     }
     .stat-card .icon {
-        font-size: 20px;
-        padding: 12px;
-        border-radius: 50%;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 48px;
-        height: 48px;
+        font-size: 20px; padding: 12px; border-radius: 50%; color: white;
+        display: flex; align-items: center; justify-content: center;
+        width: 48px; height: 48px;
     }
     .stat-card .icon.total { background-color: var(--primary-color); }
     .stat-card .icon.on-proses { background-color: var(--warning-color); }
@@ -105,7 +107,7 @@
     .stat-card h3 { margin: 0; font-size: 24px; }
     .stat-card p { margin: 0; color: #888; font-size: 14px; }
     
-    /* === CONTROLS PANEL === */
+    /* CONTROLS PANEL */
     .controls-panel {
         display: flex;
         justify-content: space-between;
@@ -124,7 +126,7 @@
     .date-filter-group { display: flex; align-items: center; gap: 5px; }
     .date-filter-group label { font-size: 14px; }
 
-    /* === SIDEBAR === */
+    /* SIDEBAR */
     .sidebar h3 { margin-top: 0; font-size: 18px; border-bottom: 1px solid #4a627a; padding-bottom: 10px; margin-bottom: 10px; }
     .sidebar label.section-toggle { display: block; margin-top: 20px; font-size: 16px; cursor: pointer; font-weight: 600; padding: 10px; border-radius: 5px; transition: background-color 0.2s; }
     .sidebar label.section-toggle:hover, .sidebar label.section-toggle.active { background-color: #34495e; }
@@ -155,8 +157,8 @@
       background: white; padding: 20px; border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: none; margin-top: 20px; flex-shrink: 0;
     }
-    #tableView { display: flex; flex-direction: column; flex-grow: 1; min-height: 0; margin-top: 0; }
-    .table-container { flex-grow: 1; overflow: auto; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    #tableView { display: flex; flex-direction: column; flex-grow: 1; min-height: 0; margin-top: 20px; }
+    .table-container { flex-grow: 1; overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 12px 15px; border-bottom: 1px solid var(--medium-grey); text-align: left; white-space: nowrap; }
     th { background-color: #f9fafb; position: sticky; top: 0; z-index: 2; text-align: center; font-size: 12px; color: #555; }
@@ -168,13 +170,70 @@
     .pagination-controls button.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
     .pagination-controls button:disabled { cursor: not-allowed; opacity: 0.5; }
     .rows-per-page select { padding: 5px; border-radius: 4px; border: 1px solid #ccc; }
+    
+    /* === CSS UNTUK MOBILE === */
+    @media (max-width: 992px) {
+        body.sidebar-visible .main {
+            margin-left: 0; /* Pastikan main content tidak terdorong */
+        }
+        .main {
+            margin-left: 0;
+            padding: 10px;
+        }
+        .header h2 { font-size: 18px; }
+        .controls-panel { flex-direction: column; align-items: stretch; }
+
+        /* Transformasi tabel menjadi kartu */
+        .table-container {
+            border: none;
+            box-shadow: none;
+            background: transparent;
+            overflow-x: hidden;
+        }
+        table thead {
+            display: none;
+        }
+        table, tbody, tr, td {
+            display: block;
+        }
+        tr {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+            padding: 5px 15px;
+        }
+        td {
+            padding: 10px;
+            padding-left: 50%;
+            position: relative;
+            text-align: right;
+            border-bottom: 1px dotted #eee;
+            white-space: normal;
+        }
+        td:last-child {
+            border-bottom: none;
+        }
+        td::before {
+            content: attr(data-label);
+            position: absolute;
+            left: 15px;
+            width: 45%;
+            font-weight: 600;
+            text-align: left;
+            white-space: nowrap;
+            color: #555;
+        }
+        td.actions-cell {
+            text-align: right;
+        }
+    }
   </style>
 </head>
-<body>
+<body class="sidebar-hidden">
 
   <div class="sidebar">
     <h3>⚙️ Sidebar Pengaturan</h3>
-    
     <label class="section-toggle active" id="navTable" onclick="showView('table')">📊 Ringkasan Laporan</label>
     <div id="reportSummary">
       <p>Total Invoice: <b id="totalCount">0</b></p>
@@ -274,20 +333,20 @@
     </div>
     
     <div class="form-container" id="formContainer">
-        <div class="form-grid">
-            <div class="form-field"><label for="noInvoice">No Invoice</label><input type="text" id="noInvoice" /></div>
-            <div class="form-field"><label for="tglKirimTimesheet" class="label-tum">Tgl Kirim Timesheet (TUM)</label><input type="date" id="tglKirimTimesheet" /></div>
-            <div class="form-field"><label for="tglTerimaTimesheetTDM1" class="label-sparepart">Tgl terima timesheet dari TUM (Sparepart)</label><input type="date" id="tglTerimaTimesheetTDM1" /></div>
-            <div class="form-field"><label for="tglRoutingApproval" class="label-sparepart">Tgl Routing Approval (Sparepart)</label><input type="date" id="tglRoutingApproval" /></div>
-            <div class="form-field"><label for="tglTerimaTimesheetSparepart" class="label-logistic">Tgl Terima Timesheet dari Sparepart (Logistic)</label><input type="date" id="tglTerimaTimesheetSparepart" /></div>
-            <div class="form-field"><label for="tglKirimInvoice" class="label-tum">Tgl Kirim Invoice (TUM)</label><input type="date" id="tglKirimInvoice" /></div>
-            <div class="form-field"><label for="tglTerimaInvoice" class="label-logistic">Tgl Terima Invoice (Logistic)</label><input type="date" id="tglTerimaInvoice" /></div>
-            <div class="form-field"><label for="tglCreatePA" class="label-logistic">Tgl Create PA (Logistic)</label><input type="date" id="tglCreatePA" /></div>
-            <div class="form-field"><label for="status">Status</label><select id="status"></select></div>
-            <div class="form-field"><label for="remark">Remark</label><input type="text" id="remark" /></div>
-        </div>
-        <button class="btn" id="submitBtn" onclick="saveInvoice()" style="margin-top:20px;">Simpan</button>
-        <button class="btn" onclick="toggleForm(false)" style="margin-top:20px; background-color: #e74c3c;">Batal</button>
+      <div class="form-grid">
+        <div class="form-field"><label for="noInvoice">No Invoice</label><input type="text" id="noInvoice" /></div>
+        <div class="form-field"><label for="tglKirimTimesheet" class="label-tum">Tgl Kirim Timesheet (TUM)</label><input type="date" id="tglKirimTimesheet" /></div>
+        <div class="form-field"><label for="tglTerimaTimesheetTDM1" class="label-sparepart">Tgl terima timesheet dari TUM (Sparepart)</label><input type="date" id="tglTerimaTimesheetTDM1" /></div>
+        <div class="form-field"><label for="tglRoutingApproval" class="label-sparepart">Tgl Routing Approval (Sparepart)</label><input type="date" id="tglRoutingApproval" /></div>
+        <div class="form-field"><label for="tglTerimaTimesheetSparepart" class="label-logistic">Tgl Terima Timesheet dari Sparepart (Logistic)</label><input type="date" id="tglTerimaTimesheetSparepart" /></div>
+        <div class="form-field"><label for="tglKirimInvoice" class="label-tum">Tgl Kirim Invoice (TUM)</label><input type="date" id="tglKirimInvoice" /></div>
+        <div class="form-field"><label for="tglTerimaInvoice" class="label-logistic">Tgl Terima Invoice (Logistic)</label><input type="date" id="tglTerimaInvoice" /></div>
+        <div class="form-field"><label for="tglCreatePA" class="label-logistic">Tgl Create PA (Logistic)</label><input type="date" id="tglCreatePA" /></div>
+        <div class="form-field"><label for="status">Status</label><select id="status"></select></div>
+        <div class="form-field"><label for="remark">Remark</label><input type="text" id="remark" /></div>
+      </div>
+      <button class="btn" id="submitBtn" onclick="saveInvoice()" style="margin-top:20px;">Simpan</button>
+      <button class="btn" onclick="toggleForm(false)" style="margin-top:20px; background-color: #e74c3c;">Batal</button>
     </div>
 
     <div class="chart-container" id="chartContainer">
@@ -443,28 +502,28 @@ function renderTable(data) {
         row.dataset.id = invoice.id;
         row.className = invoice.status ? `status-${invoice.status.replace(/\s+/g, '')}` : '';
         const getLeadtimeCell = (startDate, endDate, thresholdKey) => {
-            if (!startDate || !endDate) return '<td></td>';
+            if (!startDate || !endDate) return '<td data-label="Leadtime"></td>';
             const diffDays = Math.round((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24));
             const isOverdue = diffDays > leadtimeSettings[thresholdKey];
-            return `<td class="${isOverdue ? 'peringatan' : ''}">${diffDays} hari</td>`;
+            return `<td data-label="Leadtime" class="${isOverdue ? 'peringatan' : ''}">${diffDays} hari</td>`;
         };
         row.innerHTML = `
-            <td>${invoice.noInvoice || ""}</td>
-            <td>${invoice.tglKirimTimesheet || ""}</td>
+            <td data-label="No Invoice">${invoice.noInvoice || ""}</td>
+            <td data-label="Tgl kirim timesheet">${invoice.tglKirimTimesheet || ""}</td>
             ${getLeadtimeCell(invoice.tglKirimTimesheet, invoice.tglTerimaTimesheetTDM1, 'lt_tum_sparepart1')}
-            <td>${invoice.tglTerimaTimesheetTDM1 || ""}</td>
+            <td data-label="Tgl terima dari TUM">${invoice.tglTerimaTimesheetTDM1 || ""}</td>
             ${getLeadtimeCell(invoice.tglTerimaTimesheetTDM1, invoice.tglRoutingApproval, 'lt_sparepart1_routing')}
-            <td>${invoice.tglRoutingApproval || ""}</td>
+            <td data-label="Routing Approval">${invoice.tglRoutingApproval || ""}</td>
             ${getLeadtimeCell(invoice.tglRoutingApproval, invoice.tglTerimaTimesheetSparepart, 'lt_routing_logistic1')}
-            <td>${invoice.tglTerimaTimesheetSparepart || ""}</td>
-            <td>${invoice.tglKirimInvoice || ""}</td>
+            <td data-label="Tgl Terima dari Sparepart">${invoice.tglTerimaTimesheetSparepart || ""}</td>
+            <td data-label="Tgl kirim invoice">${invoice.tglKirimInvoice || ""}</td>
             ${getLeadtimeCell(invoice.tglKirimInvoice, invoice.tglTerimaInvoice, 'lt_tum2_logistic2')}
-            <td>${invoice.tglTerimaInvoice || ""}</td>
+            <td data-label="Tgl terima invoice">${invoice.tglTerimaInvoice || ""}</td>
             ${getLeadtimeCell(invoice.tglTerimaInvoice, invoice.tglCreatePA, 'lt_logistic2_pa')}
-            <td>${invoice.tglCreatePA || ""}</td>
-            <td><select onchange="updateInvoiceStatus('${invoice.id}', this.value)">${statusOptions.map(opt => `<option value="${opt}" ${opt === invoice.status ? "selected" : ""}>${opt}</option>`).join("")}</select></td>
-            <td>${invoice.remark || ""}</td>
-            <td><button onclick="editInvoice('${invoice.id}')">✏️</button><button onclick="deleteInvoice('${invoice.id}')">🗑️</button></td>
+            <td data-label="Tgl Create PA">${invoice.tglCreatePA || ""}</td>
+            <td data-label="Status"><select onchange="updateInvoiceStatus('${invoice.id}', this.value)">${statusOptions.map(opt => `<option value="${opt}" ${opt === invoice.status ? "selected" : ""}>${opt}</option>`).join("")}</select></td>
+            <td data-label="Remark">${invoice.remark || ""}</td>
+            <td data-label="Aksi" class="actions-cell"><button onclick="editInvoice('${invoice.id}')">✏️</button><button onclick="deleteInvoice('${invoice.id}')">🗑️</button></td>
         `;
         tbody.appendChild(row);
     });
@@ -636,8 +695,8 @@ function saveLeadtimeSettings() {
 }
 
 function toggleSidebar() {
+    document.body.classList.toggle('sidebar-visible');
     document.body.classList.toggle('sidebar-hidden');
-    localStorage.setItem('sidebarState', document.body.classList.contains('sidebar-hidden') ? 'hidden' : 'visible');
 }
 function toggleForm(forceShow = null) {
     const form = document.getElementById("formContainer");
